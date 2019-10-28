@@ -155,7 +155,6 @@ func latestGraphImageID(ns []*html.Node) (string, error) {
 			match := re.FindStringSubmatch(str)
 			if 0 < len(match) {
 				id := match[len(match)-1]
-				fmt.Printf("id: %s\n", id)
 				return id, nil
 			}
 			return "", msg
@@ -186,15 +185,17 @@ func notify(user []string) {
 		}
 	case "darwin":
 		for _, u := range user {
-			notificationCmd := fmt.Sprintf("'display notification \"%s\"'", u)
+			notificationCmd := fmt.Sprintf(`display notification "%s"`, u)
 			cmds = append(cmds, exec.Command("osascript", "-e", notificationCmd))
 		}
 	}
 
+	var stderr bytes.Buffer
 	for _, c := range cmds {
+		c.Stderr = &stderr
 		err = c.Run()
 		if nil != err {
-			fmt.Printf("notify with error: %s\n", err)
+			fmt.Printf("notify %s: %s\n", err, stderr.String())
 		}
 	}
 }
