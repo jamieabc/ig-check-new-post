@@ -7,18 +7,22 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"regexp"
 	"runtime"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/jamieabc/ig-check-new-post/config_parser"
 	"golang.org/x/net/html"
 )
 
 const (
-	instagramURL    = "https://www.instagram.com"
-	sharedDataStr   = "_sharedData"
-	graphImageRegex = `"GraphImage","id":"(\d+)"`
+	instagramURL      = "https://www.instagram.com"
+	sharedDataStr     = "_sharedData"
+	graphImageRegex   = `"GraphImage","id":"(\d+)"`
+	checkTimeInterval = 30 * time.Minute
 )
 
 var (
@@ -31,17 +35,32 @@ func main() {
 		return
 	}
 
-	cache = make(map[string]string)
-
 	fileName := os.Args[1]
 	config, err := config_parser.Parse(fileName)
 	if nil != err {
 		fmt.Printf("parser %s with error: %s\n", err)
 	}
 
-	usersWithNewPost := check(config, cache)
+	go periodicCheckAndNotify(config)
 
-	notify(usersWithNewPost)
+	// wait for termination signal
+	termSignal := make(chan os.Signal, 1)
+	signal.Notify(termSignal, syscall.SIGINT)
+	<-termSignal
+}
+
+func periodicCheckAndNotify(config config_parser.Config) {
+	cache = make(map[string]string)
+	timer := time.NewTimer(1 * time.Second)
+
+	for {
+		select {
+		case <-timer.C:
+			usersWithNewPost := check(config, cache)
+			notify(usersWithNewPost)
+			timer.Reset(checkTimeInterval)
+		}
+	}
 }
 
 func check(config config_parser.Config, cache map[string]string) []string {
